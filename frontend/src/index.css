@@ -304,11 +304,12 @@ code {
 
 /* Button variants */
 .btn-secondary {
-  background: var(--secondary-gradient);
+  background: linear-gradient(135deg, #999999 0%, #666666 100%);
+  color: #ffffff;
 }
 
 .btn-secondary:hover {
-  background: var(--secondary-color);
+  background: #888888;
 }
 
 .btn-success {
@@ -440,7 +441,7 @@ code {
 /* Question Text */
 .question-text {
   font-size: clamp(1.2rem, 3vw, 1.6rem);
-  color: var(--gray-800);
+  color: #000000;
   margin-bottom: var(--space-xl);
   line-height: 1.7;
   font-weight: 600;

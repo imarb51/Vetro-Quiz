@@ -85,7 +85,7 @@ const QuizQuestion = ({
 
       <nav className="navigation-buttons" aria-label="Quiz navigation">
         <button 
-          className="btn btn-secondary" 
+          className="btn" 
           onClick={onPrevious} 
           disabled={currentQuestionIndex === 0}
           aria-label="Go to previous question"

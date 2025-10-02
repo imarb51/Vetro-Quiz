@@ -81,55 +81,8 @@ def init_database():
     # Clear existing data for demo purposes
     cursor.execute('DELETE FROM questions')
 
-    # Insert sample quiz questions
-    sample_questions = [
-        {
-            "question_text": "What is the capital of France?",
-            "options": ["London", "Berlin", "Paris", "Madrid"],
-            "correct_option": 2
-        },
-        {
-            "question_text": "Which planet is known as the Red Planet?",
-            "options": ["Venus", "Mars", "Jupiter", "Saturn"],
-            "correct_option": 1
-        },
-        {
-            "question_text": "What is 2 + 2?",
-            "options": ["3", "4", "5", "6"],
-            "correct_option": 1
-        },
-        {
-            "question_text": "Who painted the Mona Lisa?",
-            "options": ["Vincent van Gogh", "Pablo Picasso", "Leonardo da Vinci", "Michelangelo"],
-            "correct_option": 2
-        },
-        {
-            "question_text": "What is the largest ocean on Earth?",
-            "options": ["Atlantic Ocean", "Indian Ocean", "Arctic Ocean", "Pacific Ocean"],
-            "correct_option": 3
-        },
-        {
-            "question_text": "Which programming language is known for its use in web development?",
-            "options": ["C++", "JavaScript", "Assembly", "COBOL"],
-            "correct_option": 1
-        },
-        {
-            "question_text": "What year did World War II end?",
-            "options": ["1943", "1944", "1945", "1946"],
-            "correct_option": 2
-        },
-        {
-            "question_text": "Which element has the chemical symbol 'O'?",
-            "options": ["Gold", "Oxygen", "Silver", "Iron"],
-            "correct_option": 1
-        }
-    ]
-
-    for q in sample_questions:
-        cursor.execute(
-            'INSERT INTO questions (question_text, options, correct_option) VALUES (?, ?, ?)',
-            (q["question_text"], json.dumps(q["options"]), q["correct_option"])
-        )
+    # Don't insert sample questions - admin will add them
+    # Questions will be added by admin through the admin panel
 
     # Create default admin user if not exists
     admin_email = "imranance99@gmail.com"

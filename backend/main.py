@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status, Request
+from fastapi import FastAPI, HTTPException, Depends, status, Request, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
 import json
@@ -9,7 +9,10 @@ from dotenv import load_dotenv
 import logging
 
 # Import models
-from models import Question, UserAnswers, QuizResult, QuestionWithAnswer
+from models import (
+    Question, UserAnswers, QuizResult, QuestionWithAnswer,
+    AdminLogin, AdminUser, UserUpdate, QuestionCreate, QuestionUpdate
+)
 from auth_models import (
     User, UserCreate, UserLogin, Token, QuizResultWithUser,
     GoogleAuthRequest, AdminStats
@@ -541,6 +544,408 @@ async def delete_question(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete question: {str(e)}"
+        )
+
+@app.put("/api/admin/questions/{question_id}")
+async def update_question(
+    question_id: int,
+    question_data: QuestionUpdate,
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """Update a question (admin only)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if question exists
+        cursor.execute("SELECT * FROM questions WHERE id = ?", (question_id,))
+        existing = cursor.fetchone()
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Question not found"
+            )
+        
+        # Build update query dynamically
+        update_fields = []
+        update_values = []
+        
+        if question_data.question_text is not None:
+            update_fields.append("question_text = ?")
+            update_values.append(question_data.question_text)
+        
+        if question_data.options is not None:
+            update_fields.append("options = ?")
+            update_values.append(json.dumps(question_data.options))
+        
+        if question_data.correct_option is not None:
+            update_fields.append("correct_option = ?")
+            update_values.append(question_data.correct_option)
+        
+        if not update_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields to update"
+            )
+        
+        update_values.append(question_id)
+        query = f"UPDATE questions SET {', '.join(update_fields)} WHERE id = ?"
+        
+        cursor.execute(query, update_values)
+        conn.commit()
+        conn.close()
+        
+        return {"message": "Question updated successfully"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update question: {str(e)}"
+        )
+
+@app.post("/api/admin/questions/upload-pdf")
+async def upload_questions_pdf(
+    file: UploadFile = File(...),
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """Upload questions from PDF file (admin only)."""
+    try:
+        from pdf_parser import parse_quiz_pdf_from_bytes
+        
+        # Read file content
+        file_content = await file.read()
+        
+        # Parse PDF
+        questions = parse_quiz_pdf_from_bytes(file_content)
+        
+        if not questions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No questions found in PDF"
+            )
+        
+        # Insert questions into database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        inserted_count = 0
+        for q in questions:
+            cursor.execute('''
+                INSERT INTO questions (question_text, options, correct_option)
+                VALUES (?, ?, ?)
+            ''', (
+                q['question_text'],
+                json.dumps(q['options']),
+                q['correct_option']
+            ))
+            inserted_count += 1
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "message": f"Successfully uploaded {inserted_count} questions",
+            "count": inserted_count
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload PDF: {str(e)}"
+        )
+
+# ============= USER MANAGEMENT ROUTES (ADMIN) =============
+
+@app.get("/api/admin/users")
+async def get_all_users(admin_user: User = Depends(get_current_admin_user)):
+    """Get all users with their quiz statistics (admin only)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get users with their quiz stats
+        cursor.execute('''
+            SELECT 
+                u.id,
+                u.email,
+                u.name,
+                u.phone,
+                u.address,
+                u.is_active,
+                u.created_at,
+                COUNT(qa.id) as total_attempts,
+                COALESCE(AVG(qa.percentage), 0) as average_score
+            FROM users u
+            LEFT JOIN quiz_attempts qa ON u.id = qa.user_id
+            WHERE u.is_admin = 0
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        users = []
+        for row in rows:
+            users.append({
+                "id": row["id"],
+                "email": row["email"],
+                "full_name": row["name"] or "N/A",
+                "phone": row["phone"],
+                "address": row["address"],
+                "is_active": bool(row["is_active"]),
+                "created_at": row["created_at"],
+                "total_attempts": row["total_attempts"],
+                "average_score": round(float(row["average_score"]), 2)
+            })
+        
+        return {"users": users}
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get users: {str(e)}"
+        )
+
+@app.get("/api/admin/users/{user_id}")
+async def get_user_details(
+    user_id: str,
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """Get detailed information about a specific user (admin only)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get user info
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Get user's quiz history
+        cursor.execute('''
+            SELECT id, score, total_questions, percentage, completed_at
+            FROM quiz_attempts
+            WHERE user_id = ?
+            ORDER BY completed_at DESC
+        ''', (user_id,))
+        
+        attempts = []
+        for row in cursor.fetchall():
+            attempts.append({
+                "id": row["id"],
+                "score": row["score"],
+                "total_questions": row["total_questions"],
+                "percentage": round(float(row["percentage"]), 2),
+                "completed_at": row["completed_at"]
+            })
+        
+        conn.close()
+        
+        return {
+            "user": {
+                "id": user["id"],
+                "email": user["email"],
+                "full_name": user["name"] or "N/A",
+                "phone": user["phone"],
+                "address": user["address"],
+                "is_active": bool(user["is_active"]),
+                "created_at": user["created_at"]
+            },
+            "quiz_history": attempts
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get user details: {str(e)}"
+        )
+
+@app.put("/api/admin/users/{user_id}")
+async def update_user(
+    user_id: str,
+    user_data: UserUpdate,
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """Update user details (admin only)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if user exists
+        cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+        if not cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Build update query
+        update_fields = []
+        update_values = []
+        
+        if user_data.email is not None:
+            # Check if email is already taken
+            cursor.execute("SELECT id FROM users WHERE email = ? AND id != ?", (user_data.email, user_id))
+            if cursor.fetchone():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email already in use"
+                )
+            update_fields.append("email = ?")
+            update_values.append(user_data.email)
+        
+        if user_data.password is not None:
+            hashed_password = get_password_hash(user_data.password)
+            update_fields.append("hashed_password = ?")
+            update_values.append(hashed_password)
+        
+        if user_data.name is not None:
+            update_fields.append("name = ?")
+            update_values.append(user_data.name)
+        
+        if user_data.phone is not None:
+            update_fields.append("phone = ?")
+            update_values.append(user_data.phone)
+        
+        if user_data.address is not None:
+            update_fields.append("address = ?")
+            update_values.append(user_data.address)
+        
+        if not update_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields to update"
+            )
+        
+        update_values.append(user_id)
+        query = f"UPDATE users SET {', '.join(update_fields)} WHERE id = ?"
+        
+        cursor.execute(query, update_values)
+        conn.commit()
+        conn.close()
+        
+        return {"message": "User updated successfully"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update user: {str(e)}"
+        )
+
+@app.delete("/api/admin/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """Delete a user (admin only)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if user exists
+        cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+        if not cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Delete user's quiz attempts first (foreign key constraint)
+        cursor.execute("DELETE FROM quiz_attempts WHERE user_id = ?", (user_id,))
+        
+        # Delete user
+        cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return {"message": "User deleted successfully"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete user: {str(e)}"
+        )
+
+# ============= ADMIN AUTH ROUTE =============
+
+@app.post("/api/admin/login")
+async def admin_login(credentials: AdminLogin):
+    """Admin login with default credentials."""
+    try:
+        # Default admin credentials
+        DEFAULT_ADMIN_USERNAME = "admin"
+        DEFAULT_ADMIN_PASSWORD = "admin123"
+        
+        if credentials.username != DEFAULT_ADMIN_USERNAME or credentials.password != DEFAULT_ADMIN_PASSWORD:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials"
+            )
+        
+        # Check if admin user exists in database
+        admin_user = get_user_by_email("admin@quiz.com")
+        
+        if not admin_user:
+            # Create admin user if doesn't exist
+            import uuid
+            from database import get_db_connection
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            admin_id = str(uuid.uuid4())
+            hashed_password = get_password_hash(DEFAULT_ADMIN_PASSWORD)
+            cursor.execute('''
+                INSERT INTO users (id, email, hashed_password, name, is_admin, is_active)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (admin_id, "admin@quiz.com", hashed_password, "Administrator", 1, 1))
+            
+            conn.commit()
+            conn.close()
+            
+            admin_user = get_user_by_id(admin_id)
+        
+        if not admin_user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create admin user"
+            )
+        
+        admin_dict = {key: admin_user[key] for key in admin_user.keys()}
+        
+        # Generate tokens
+        tokens = generate_tokens(admin_dict)
+        
+        return Token(
+            access_token=tokens["access_token"],
+            refresh_token=tokens["refresh_token"],
+            token_type=tokens["token_type"],
+            expires_in=tokens["expires_in"],
+            user=User(**admin_dict)
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Admin login failed: {str(e)}"
         )
 
 # ============= ENHANCED QUIZ ROUTES WITH AUTH =============

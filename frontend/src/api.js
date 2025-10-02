@@ -11,7 +11,7 @@ const apiClient = axios.create({
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem('access_token') || localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -26,9 +26,17 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('access_token');
+      localStorage.removeItem('accessToken');
       localStorage.removeItem('refresh_token');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user_data');
-      window.location.href = '/login';
+      localStorage.removeItem('user');
+      // Check if we're on an admin route
+      if (window.location.pathname.startsWith('/admin')) {
+        window.location.href = '/admin';
+      } else {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -64,6 +72,17 @@ export const authAPI = {
     }
   },
 
+  // Admin login
+  adminLogin: async (credentials) => {
+    try {
+      const response = await apiClient.post('/admin/login', credentials);
+      return response;
+    } catch (error) {
+      console.error('Admin login error:', error);
+      throw error;
+    }
+  },
+
   // Google OAuth login
   googleLogin: async (credential) => {
     try {
@@ -90,21 +109,25 @@ export const authAPI = {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      // Clear all possible token keys
       localStorage.removeItem('access_token');
+      localStorage.removeItem('accessToken');
       localStorage.removeItem('refresh_token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
       localStorage.removeItem('user_data');
     }
   },
 
   // Get current user
   getCurrentUser: () => {
-    const userData = localStorage.getItem('user_data');
+    const userData = localStorage.getItem('user_data') || localStorage.getItem('user');
     return userData ? JSON.parse(userData) : null;
   },
 
   // Check if user is authenticated
   isAuthenticated: () => {
-    return !!localStorage.getItem('access_token');
+    return !!(localStorage.getItem('access_token') || localStorage.getItem('accessToken'));
   },
 
   // Check if user is admin
@@ -183,6 +206,17 @@ export const adminAPI = {
     }
   },
 
+  // Update question
+  updateQuestion: async (questionId, questionData) => {
+    try {
+      const response = await apiClient.put(`/admin/questions/${questionId}`, questionData);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating question:', error);
+      throw error;
+    }
+  },
+
   // Delete question
   deleteQuestion: async (questionId) => {
     try {
@@ -192,5 +226,64 @@ export const adminAPI = {
       console.error('Error deleting question:', error);
       throw error;
     }
-  }
+  },
+
+  // Upload PDF with questions
+  uploadPDF: async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await apiClient.post('/admin/questions/upload-pdf', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error uploading PDF:', error);
+      throw error;
+    }
+  },
+
+  // User Management
+  getAllUsers: async () => {
+    try {
+      const response = await apiClient.get('/admin/users');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      throw error;
+    }
+  },
+
+  getUserDetails: async (userId) => {
+    try {
+      const response = await apiClient.get(`/admin/users/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+      throw error;
+    }
+  },
+
+  updateUser: async (userId, userData) => {
+    try {
+      const response = await apiClient.put(`/admin/users/${userId}`, userData);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw error;
+    }
+  },
+
+  deleteUser: async (userId) => {
+    try {
+      const response = await apiClient.delete(`/admin/users/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw error;
+    }
+  },
 };

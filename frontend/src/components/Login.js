@@ -167,7 +167,16 @@ const Login = ({ onLogin, onSwitchToRegister, onSwitchToAdminLogin, setError }) 
               </button>
             </div>
             
-            
+            <div className="action-group" style={{ marginTop: '10px' }}>
+              <span>Are you an administrator?</span>
+              <button
+                type="button"
+                className="link-btn"
+                onClick={onSwitchToAdminLogin}
+              >
+                Admin Login
+              </button>
+            </div>
           </div>
 
           

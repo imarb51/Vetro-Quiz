@@ -10,8 +10,12 @@ import ResultsScreen from "./ResultsScreen";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import AdminLogin from "./components/AdminLogin";
+import AdminLoginPage from "./components/AdminLoginPage";
 import UserDashboard from "./components/UserDashboard";
 import AdminDashboard from "./components/AdminDashboard";
+import NewAdminDashboard from "./components/NewAdminDashboard";
+import UsersManagement from "./components/UsersManagement";
+import QuestionsManagement from "./components/QuestionsManagement";
 
 const QUIZ_TIME_LIMIT = 5 * 60; // 5 minutes in seconds
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID;
@@ -107,7 +111,7 @@ function AppContent() {
     setError(null);
     // Navigate based on user role
     if (userData.is_admin) {
-      navigate('/admin-dashboard');
+      navigate('/admin/dashboard');
     } else {
       navigate('/dashboard');
     }
@@ -211,17 +215,56 @@ function AppContent() {
         )}
 
         <Routes>
+          {/* Admin Routes - Must come BEFORE other routes */}
+          <Route 
+            path="/admin" 
+            element={
+              user ? (
+                <Navigate to="/admin/dashboard" replace />
+              ) : (
+                <AdminLoginPage onLogin={handleLogin} />
+              )
+            } 
+          />
+
+          <Route 
+            path="/admin/dashboard" 
+            element={
+              <AdminRoute user={user}>
+                <NewAdminDashboard />
+              </AdminRoute>
+            } 
+          />
+
+          <Route 
+            path="/admin/users" 
+            element={
+              <AdminRoute user={user}>
+                <UsersManagement />
+              </AdminRoute>
+            } 
+          />
+
+          <Route 
+            path="/admin/questions" 
+            element={
+              <AdminRoute user={user}>
+                <QuestionsManagement />
+              </AdminRoute>
+            } 
+          />
+
           {/* Auth Routes */}
           <Route 
             path="/login" 
             element={
               user ? (
-                <Navigate to={user.is_admin ? "/admin-dashboard" : "/dashboard"} replace />
+                <Navigate to={user.is_admin ? "/admin/dashboard" : "/dashboard"} replace />
               ) : (
                 <Login 
                   onLogin={handleLogin}
                   onSwitchToRegister={() => navigate('/register')}
-                  onSwitchToAdminLogin={() => navigate('/admin-login')}
+                  onSwitchToAdminLogin={() => navigate('/admin')}
                   setError={setError}
                 />
               )
@@ -237,21 +280,6 @@ function AppContent() {
                 <Register 
                   onRegister={handleRegister}
                   onSwitchToLogin={() => navigate('/login')}
-                  setError={setError}
-                />
-              )
-            } 
-          />
-          
-          <Route 
-            path="/admin-login" 
-            element={
-              user ? (
-                <Navigate to={user.is_admin ? "/admin-dashboard" : "/dashboard"} replace />
-              ) : (
-                <AdminLogin
-                  onLogin={handleLogin}
-                  onSwitchToUserLogin={() => navigate('/login')}
                   setError={setError}
                 />
               )
@@ -273,19 +301,6 @@ function AppContent() {
           />
 
           <Route 
-            path="/admin-dashboard" 
-            element={
-              <AdminRoute user={user}>
-                <AdminDashboard 
-                  user={user}
-                  onLogout={handleLogout}
-                  onStartQuiz={() => navigate('/start')}
-                />
-              </AdminRoute>
-            } 
-          />
-
-          <Route 
             path="/start" 
             element={
               <ProtectedRoute user={user}>
@@ -293,7 +308,7 @@ function AppContent() {
                   onStartQuiz={startQuiz} 
                   questionsCount={questions.length}
                   user={user}
-                  onBackToDashboard={() => navigate(user?.is_admin ? '/admin-dashboard' : '/dashboard')}
+                  onBackToDashboard={() => navigate(user?.is_admin ? '/admin/dashboard' : '/dashboard')}
                 />
               </ProtectedRoute>
             } 
@@ -331,7 +346,7 @@ function AppContent() {
                   <ResultsScreen 
                     results={results} 
                     onRetakeQuiz={retakeQuiz}
-                    onBackToDashboard={() => navigate(user?.is_admin ? '/admin-dashboard' : '/dashboard')}
+                    onBackToDashboard={() => navigate(user?.is_admin ? '/admin/dashboard' : '/dashboard')}
                   />
                 ) : (
                   <Navigate to="/dashboard" replace />
@@ -344,7 +359,7 @@ function AppContent() {
           <Route 
             path="/" 
             element={
-              <Navigate to={user ? (user.is_admin ? "/admin-dashboard" : "/dashboard") : "/login"} replace />
+              <Navigate to={user ? (user.is_admin ? "/admin/dashboard" : "/dashboard") : "/login"} replace />
             } 
           />
 
