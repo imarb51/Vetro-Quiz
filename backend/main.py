@@ -414,8 +414,8 @@ async def get_admin_stats(admin_user: User = Depends(get_current_admin_user)):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Get total users
-        cursor.execute("SELECT COUNT(*) as count FROM users WHERE is_active = 1")
+        # Get total users (excluding admins)
+        cursor.execute("SELECT COUNT(*) as count FROM users WHERE is_admin = 0")
         total_users = cursor.fetchone()['count']
         
         # Get total questions

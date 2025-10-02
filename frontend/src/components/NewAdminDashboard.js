@@ -53,7 +53,7 @@ function AdminDashboard() {
       {/* Sidebar */}
       <aside className={`admin-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
-          <h2>📊 Admin Panel</h2>
+          <h2>{sidebarOpen ? '📊 Admin Panel' : ''}</h2>
           <button 
             className="sidebar-toggle"
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -92,6 +92,7 @@ function AdminDashboard() {
           <button
             className="nav-item"
             onClick={() => navigate('/dashboard')}
+            
           >
             <span className="nav-icon">🏠</span>
             {sidebarOpen && <span>User Site</span>}

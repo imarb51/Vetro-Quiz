@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { quizAPI } from '../api';
-import '../Dashboard.css';
-
+import './Dashboard.css';
 const UserDashboard = ({ user, onLogout, onStartQuiz }) => {
   const [quizHistory, setQuizHistory] = useState([]);
   const [loading, setLoading] = useState(false);
